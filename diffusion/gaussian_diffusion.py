@@ -382,6 +382,8 @@ class GaussianDiffusion:
         denoised_fn=None,
         cond_fn=None,
         model_kwargs=None,
+        ## Add
+        noise=None,
     ):
         """
         Sample x_{t-1} from the model at the given timestep.
@@ -407,7 +409,8 @@ class GaussianDiffusion:
             denoised_fn=denoised_fn,
             model_kwargs=model_kwargs,
         )
-        noise = th.randn_like(x)
+        if noise is None:
+            noise = th.randn_like(x)
         nonzero_mask = (
             (t != 0).float().view(-1, *([1] * (len(x.shape) - 1)))
         )  # no noise when t == 0
@@ -415,6 +418,32 @@ class GaussianDiffusion:
             out["mean"] = self.condition_mean(cond_fn, out, x, t, model_kwargs=model_kwargs)
         sample = out["mean"] + nonzero_mask * th.exp(0.5 * out["log_variance"]) * noise
         return {"sample": sample, "pred_xstart": out["pred_xstart"]}
+
+    def p_sample_once(self, model_fn, z, t, *, clip_denoised=False, model_kwargs=None, device=None):
+        """
+        z: [B, ...] latent at time t
+        t: int or tensor scalar (current timestep)
+        returns z_prev at time t-1
+        """
+        if not torch.is_tensor(t):
+            t = torch.tensor([t], device=z.device, dtype=torch.long)
+        elif t.dim() == 0:
+            t = t.view(1).to(z.device)
+        else:
+            t = t.to(z.device)
+
+        out = self.p_sample(
+            model_fn,
+            z,
+            t,
+            clip_denoised=clip_denoised,
+            model_kwargs=model_kwargs,
+        )
+        # p_sample 通常返回 dict，里头有 'sample'
+        if isinstance(out, dict) and "sample" in out:
+            return out["sample"]
+        return out
+
 
     def p_sample_loop(
         self,
@@ -509,6 +538,44 @@ class GaussianDiffusion:
                 )
                 yield out
                 img = out["sample"]
+
+    def p_sample_step(
+        self,
+        model,
+        x,
+        t_int,
+        clip_denoised=False,
+        model_kwargs=None,
+        noise=None,
+        device=None,
+    ):
+        """
+        Single reverse step: x_t -> x_{t-1}.
+        - 跟 p_sample_loop 内部每一步做的事情一模一样
+        - 额外支持外部指定 noise 方便你做多分支 / DAG / MST 搜索
+        """
+        if device is None:
+            device = x.device
+
+        # 允许传 int 或 tensor
+        if isinstance(t_int, int):
+            t = th.full((x.shape[0],), t_int, device=device, dtype=th.long)
+        elif isinstance(t_int, th.Tensor):
+            t = t_int.to(device=device, dtype=th.long)
+            if t.dim() == 0:
+                t = t.view(1).repeat(x.shape[0])
+        else:
+            raise TypeError(f"t_int must be int or torch.Tensor, got {type(t_int)}")
+
+        out = self.p_sample(
+            model,
+            x,
+            t,
+            clip_denoised=clip_denoised,
+            model_kwargs=model_kwargs,
+            noise=noise,
+        )
+        return out["sample"]
 
     def ddim_sample(
         self,
