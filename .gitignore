@@ -9,3 +9,4 @@ logs/
 outputs/
 wandb/
 .DS_Store
+.ipynb_checkpoints/
