@@ -1,0 +1,7 @@
+Save dir: ./results/imagenet10/resnet10apin_student_reward_model_resnet18_rand10
+ImageNet directory: /root/autodl-tmp/results_hparam_eval/reward_model_resnet18
+Repeat: 1/1
+=> creating model resnet_ap-10, norm: instance
+Start training with base augmentation and cut mixup
+
+(Repeat 1) Best, last acc: 36.7 0.0

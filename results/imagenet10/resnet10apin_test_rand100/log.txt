@@ -1,0 +1,2 @@
+Save dir: ./results/imagenet10/resnet10apin_test_rand100
+ImageNet directory: ./results/mst_dag

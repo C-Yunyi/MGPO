@@ -1,0 +1,2 @@
+Save dir: ./results/imagenet18/resnet10in_test_rand10
+ImageNet directory: ../autodl-tmp/ZZX/

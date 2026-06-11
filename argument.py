@@ -75,19 +75,21 @@ def remove_aug(augtype, remove_aug):
 
     return "_".join(aug_list)
 
-
 parser = argparse.ArgumentParser(description='')
 # Dataset
 parser.add_argument('-d',
                     '--dataset',
-                    default='cifar10',
+                    default='imagenet',
                     type=str,
                     help='dataset (options: mnist, fashion, svhn, cifar10, cifar100, and imagenet)')
 parser.add_argument('--data_dir',
                     default='/data_large/readonly',
                     type=str,
                     help='directory that containing dataset, except imagenet (see data.py)')
-parser.add_argument('--imagenet_dir', nargs='+', default=['/ssd_data/imagenet/'])
+parser.add_argument('--imagenet_dir', nargs='+', default=['/share/home/zhangchiLab/wangchenru/model/distill/results/test','/share/home/zhangchiLab/wangchenru/data/dataset/Imagewoof/imagewoof2/'])
+
+# parser.add_argument('--imagenet_dir', nargs='+', default=['results/test/final_distilled/train','/share/home/zhangchiLab/wangchenru/data/dataset/Imagewoof/imagewoof2/'])
+
 parser.add_argument('--nclass', default=10, type=int, help='number of classes in trianing dataset')
 parser.add_argument('--dseed', default=0, type=int, help='seed for class sampling')
 parser.add_argument('--size', default=224, type=int, help='spatial size of image')
@@ -101,14 +103,14 @@ parser.add_argument('-l',
 # Network
 parser.add_argument('-n',
                     '--net_type',
-                    default='convnet',
+                    default='resnet_ap',
                     type=str,
                     help='network type: resnet, resnet_ap, convnet')
 parser.add_argument('--norm_type',
                     default='instance',
                     type=str,
                     choices=['batch', 'instance', 'sn', 'none'])
-parser.add_argument('--depth', default=10, type=int, help='depth of the network')
+parser.add_argument('--depth', default=10, type=int, help='depth of the network')   
 parser.add_argument('--width', default=1.0, type=float, help='width of the network')
 
 # Training
@@ -146,12 +148,21 @@ parser.add_argument('--verbose',
                     help='to print the status at every iteration')
 parser.add_argument('-j', '--workers', default=8, type=int, help='number of data loading workers')
 parser.add_argument('--save_ckpt', type=str2bool, default=False)
-parser.add_argument('--tag', default='', type=str, help='name of experiment')
+parser.add_argument('--tag', default='test', type=str, help='name of experiment')
 parser.add_argument('--test', action='store_true', help='for debugging, do not save results')
 parser.add_argument('--time', action='store_true', help='measuring time for each step')
 
+# RandAugment
+parser.add_argument('--randaug', type=str2bool, default=False,
+                    help='use RandAugment for training/eval')
+parser.add_argument('--randaug_n', type=int, default=2,
+                    help='RandAugment: number of ops N')
+parser.add_argument('--randaug_m', type=int, default=9,
+                    help='RandAugment: magnitude M (0-10 in torchvision)')
+
+
 # Condense
-parser.add_argument('-i', '--ipc', type=int, default=-1, help='number of condensed data per class')
+parser.add_argument('-i', '--ipc', type=int, default=10, help='number of condensed data per class')
 parser.add_argument('-f',
                     '--factor',
                     type=int,
@@ -231,7 +242,7 @@ parser.add_argument('--reproduce', action='store_true', help='for reproduce our 
 parser.add_argument('-s',
                     '--slct_type',
                     type=str,
-                    default='idc',
+                    default='random',
                     help='data condensation type (idc, dsa, kip, random, herding)')
 parser.add_argument('--repeat', default=1, type=int, help='number of test repetetion')
 parser.add_argument('--dsa',
@@ -439,7 +450,11 @@ else:
 # Setting augmentation
 if args.mixup == 'cut':
     args.dsa_strategy = remove_aug(args.dsa_strategy, 'cutout')
-if args.dsa:
+if args.randaug:
+    args.dsa = False
+    args.augment = True
+    print(f"RandAugment enabled: N={args.randaug_n}, M={args.randaug_m}")
+elif args.dsa:
     args.augment = False
     print("DSA strategy: ", args.dsa_strategy)
 else:

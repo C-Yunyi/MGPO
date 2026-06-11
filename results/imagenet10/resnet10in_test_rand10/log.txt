@@ -1,0 +1,7 @@
+Save dir: ./results/imagenet10/resnet10in_test_rand10
+ImageNet directory: ../autodl-tmp/ZZX/
+Repeat: 1/1
+=> creating model resnet-10, norm: instance
+Start training with base augmentation and cut mixup
+
+(Repeat 1) Best, last acc: 37.3 0.0

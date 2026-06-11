@@ -8,8 +8,11 @@
 Functions for downloading pre-trained DiT models
 """
 from torchvision.datasets.utils import download_url
-import torch
 import os
+os.environ["HF_HUB_OFFLINE"] = "1"
+os.environ["TRANSFORMERS_OFFLINE"] = "1" 
+os.environ["DIFFUSERS_OFFLINE"] = "1"
+import torch
 
 
 pretrained_models = {'DiT-XL-2-512x512.pt', 'DiT-XL-2-256x256.pt'}

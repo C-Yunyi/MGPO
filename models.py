@@ -317,21 +317,43 @@ class DiT(nn.Module):
 
     def forward_with_cfg(self, x, t, y, cfg_scale):
         """
-        Forward pass of DiT, but also batches the unconditional forward pass for classifier-free guidance.
+        CFG inside model, but computed in ONE forward pass for better quality/stability.
+        x: (B, 4, H, W)
+        t: (B,)
+        y: (B,)
+        return: (B, 8, H, W) when learn_sigma=True
         """
-        # https://github.com/openai/glide-text2im/blob/main/notebooks/text2im.ipynb
-        half = x[: len(x) // 2]
-        combined = torch.cat([half, half], dim=0)
-        model_out = self.forward(combined, t, y)
-        # For exact reproducibility reasons, we apply classifier-free guidance on only
-        # three channels by default. The standard approach to cfg applies it to all channels.
-        # This can be done by uncommenting the following line and commenting-out the line following that.
-        # eps, rest = model_out[:, :self.in_channels], model_out[:, self.in_channels:]
-        eps, rest = model_out[:, :3], model_out[:, 3:]
-        cond_eps, uncond_eps = torch.split(eps, len(eps) // 2, dim=0)
-        half_eps = uncond_eps + cfg_scale * (cond_eps - uncond_eps)
-        eps = torch.cat([half_eps, half_eps], dim=0)
-        return torch.cat([eps, rest], dim=1)
+        B = x.shape[0]
+        assert t.shape[0] == B
+        assert y.shape[0] == B
+
+        # build 2B batch: same latent for cond/uncond (important!)
+        x_in = torch.cat([x, x], dim=0)
+        t_in = torch.cat([t, t], dim=0)
+
+        # labels: first half = cond, second half = uncond (1000)
+        y_null = torch.full_like(y, self.y_embedder.num_classes)
+        y_in = torch.cat([y, y_null], dim=0)
+
+        # single forward
+        model_out = self.forward(x_in, t_in, y_in)  # (2B, 8, H, W)
+
+        # split eps/rest (learn_sigma=True)
+        eps, rest = model_out[:, :self.in_channels], model_out[:, self.in_channels:]
+        cond_eps, uncond_eps = eps.chunk(2, dim=0)
+        cond_rest, uncond_rest = rest.chunk(2, dim=0)
+
+        # standard CFG on ALL 4 eps channels
+        guided_eps = uncond_eps + cfg_scale * (cond_eps - uncond_eps)
+
+        # keep sigma/rest from conditional branch (common practice)
+        out = torch.cat([guided_eps, cond_rest], dim=1)  # (B,8,H,W)
+        return out
+
+    
+
+
+
 
 
 #################################################################################

@@ -28,8 +28,10 @@ def main(args):
         file_list = './misc/class_woof.txt'
     elif args.spec == 'nette':
         file_list = './misc/class_nette.txt'
+    elif args.spec == 'idc':
+        file_list = './misc/idc_list.txt'
     else:
-        file_list = './misc/class100.txt'
+        file_list = './misc/class_indices.txt'
     with open(file_list, 'r') as fp:
         sel_classes = fp.readlines()
 
@@ -56,8 +58,53 @@ def main(args):
     ).to(device)
     # Auto-download a pre-trained model or load a custom DiT checkpoint from train.py:
     ckpt_path = args.ckpt or f"DiT-XL-2-{args.image_size}x{args.image_size}.pt"
-    state_dict = find_model(ckpt_path)
-    model.load_state_dict(state_dict, strict=False)
+    ckpt = find_model(ckpt_path)
+
+    print("[ckpt] path:", ckpt_path)
+    print("[ckpt] type:", type(ckpt))
+
+    if isinstance(ckpt, dict):
+        print("[ckpt] keys:", list(ckpt.keys()))
+
+    # 选择正确的权重分支
+    if isinstance(ckpt, dict):
+        if "ema" in ckpt:
+            print("[ckpt] using: ema")
+            sd = ckpt["ema"]
+        elif "model" in ckpt:
+            print("[ckpt] using: model")
+            sd = ckpt["model"]
+        elif "state_dict" in ckpt:
+            print("[ckpt] using: state_dict")
+            sd = ckpt["state_dict"]
+        else:
+            print("[ckpt] using: raw dict as state_dict")
+            sd = ckpt
+    else:
+        sd = ckpt
+
+    # 去掉常见前缀
+    new_sd = {}
+    for k, v in sd.items():
+        k2 = k
+        if k2.startswith("module."):
+            k2 = k2[len("module."):]
+        if k2.startswith("_orig_mod."):
+            k2 = k2[len("_orig_mod."):]
+        new_sd[k2] = v
+    sd = new_sd
+
+    # 加载并打印匹配情况
+    missing, unexpected = model.load_state_dict(sd, strict=False)
+
+    # print("[ckpt] missing:", len(missing))
+    # print("[ckpt] unexpected:", len(unexpected))
+    # print("[ckpt] first 20 missing:", missing[:20])
+    # print("[ckpt] first 20 unexpected:", unexpected[:20])
+
+    if len(missing) > 50:
+        raise RuntimeError("Too many missing keys. Model config likely mismatched with checkpoint.")
+
     model.eval()  # important!
     diffusion = create_diffusion(str(args.num_sampling_steps))
     vae = AutoencoderKL.from_pretrained(f"stabilityai/sd-vae-ft-{args.vae}").to(device)
@@ -72,16 +119,40 @@ def main(args):
             y = torch.tensor([class_label], device=device)
 
             # Setup classifier-free guidance:
-            z = torch.cat([z, z], 0)
+            # Setup classifier-free guidance:
+            print("[DEBUG] z before cat:", z.shape)
+
+            z_in = torch.cat([z, z], 0)
+            print("[DEBUG] z_in:", z_in.shape)
+            print("[DEBUG] shape passed to loop:", z_in.shape)
+
             y_null = torch.tensor([1000] * batch_size, device=device)
-            y = torch.cat([y, y_null], 0)
-            model_kwargs = dict(y=y, cfg_scale=args.cfg_scale)
+            y_in = torch.cat([y, y_null], 0)
+            print("[DEBUG] y:", y.shape, "y_in:", y_in.shape)
+
+            model_kwargs = dict(y=y_in, cfg_scale=args.cfg_scale)
 
             # Sample images:
             samples = diffusion.p_sample_loop(
-                model.forward_with_cfg, z.shape, z, clip_denoised=False, model_kwargs=model_kwargs, progress=False, device=device
+                model.forward_with_cfg,
+                z_in.shape,
+                z_in,
+                clip_denoised=False,
+                model_kwargs=model_kwargs,
+                progress=False,
+                device=device,
             )
-            samples, _ = samples.chunk(2, dim=0)  # Remove null class samples
+
+            print("[DEBUG] samples out:", samples.shape)
+
+            samples_only, _ = samples.chunk(2, dim=0)
+            print("[latent] min/max/mean/std:",
+                  samples_only.min().item(),
+                  samples_only.max().item(),
+                  samples_only.mean().item(),
+                  samples_only.std().item())
+            samples = samples_only
+
             samples = vae.decode(samples / 0.18215).sample
 
             # Save and display images:
@@ -98,12 +169,12 @@ if __name__ == "__main__":
     parser.add_argument("--num-classes", type=int, default=1000)
     parser.add_argument("--cfg-scale", type=float, default=4.0)
     parser.add_argument("--num-sampling-steps", type=int, default=50)
-    parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--ckpt", type=str, default=None,
-                        help="Optional path to a DiT checkpoint (default: auto-download a pre-trained DiT-XL/2 model).")
-    parser.add_argument("--spec", type=str, default='none', help='specific subset for generation')
-    parser.add_argument("--save-dir", type=str, default='../logs/test', help='the directory to put the generated images')
-    parser.add_argument("--num-samples", type=int, default=100, help='the desired IPC for generation')
+    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--ckpt", type=str, default="/root/autodl-tmp/ckpt_step_500.pt",
+                        help="None")
+    parser.add_argument("--spec", type=str, default='woof', help='specific subset for generation')
+    parser.add_argument("--save-dir", type=str, default='../autodl-tmp/test_500', help='the directory to put the generated images')
+    parser.add_argument("--num-samples", type=int, default=10, help='the desired IPC for generation')
     parser.add_argument("--total-shift", type=int, default=0, help='index offset for the file name')
     parser.add_argument("--nclass", type=int, default=10, help='the class number for generation')
     parser.add_argument("--phase", type=int, default=0, help='the phase number for generating large datasets')

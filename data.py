@@ -109,6 +109,8 @@ class ImageFolder(datasets.DatasetFolder):
                 file_list = './misc/class_woof.txt'
             elif self.spec == 'nette':
                 file_list = './misc/class_nette.txt'
+            elif self.spec == 'idc':
+                file_list = './misc/class_idc.txt'
             else:
                 file_list = './misc/class100.txt'
             with open(file_list, 'r') as f:

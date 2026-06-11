@@ -1,0 +1,8 @@
+Save dir: ./results/imagenet10/resnet10apin_test_rand20
+ImageNet directory: ../autodl-tmp/results/20ipc_batch_size_3
+Repeat: 1/1
+=> creating model resnet_ap-10, norm: instance
+Start training with base augmentation and cut mixup
+
+(Repeat 1) Best, last acc: 40.6 0.0
+.0
