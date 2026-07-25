@@ -114,7 +114,18 @@ def main(args):
     latent_size = args.image_size // 8
     model = DiT_models[args.model](input_size=latent_size, num_classes=args.num_classes).to(device)
     ckpt_path = args.ckpt or f"DiT-XL-2-{args.image_size}x{args.image_size}.pt"
-    state_dict = find_model(ckpt_path)
+    ckpt = find_model(ckpt_path)
+    if isinstance(ckpt, dict):
+        if "ema" in ckpt:
+            state_dict = ckpt["ema"]
+        elif "model" in ckpt:
+            state_dict = ckpt["model"]
+        elif "state_dict" in ckpt:
+            state_dict = ckpt["state_dict"]
+        else:
+            state_dict = ckpt
+    else:
+        state_dict = ckpt
     model.load_state_dict(state_dict, strict=False)
     model.eval()
 

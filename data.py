@@ -300,7 +300,10 @@ def transform_imagenet(size=-1,
                        from_tensor=False,
                        normalize=True,
                        rrc=True,
-                       rrc_size=-1):
+                       rrc_size=-1,
+                       randaug=False,
+                       randaug_n=2,
+                       randaug_m=9):
     if size > 0:
         resize_train = [transforms.Resize(size), transforms.CenterCrop(size)]
         resize_test = [transforms.Resize(size), transforms.CenterCrop(size)]
@@ -346,7 +349,13 @@ def transform_imagenet(size=-1,
     else:
         normal_fn = []
 
-    train_transform = transforms.Compose(resize_train + cast + aug + normal_fn)
+    # RandAugment operates on PIL images (uint8), so it must run before ToTensor().
+    randaug_fn = []
+    if randaug and not from_tensor:
+        randaug_fn = [transforms.RandAugment(num_ops=randaug_n, magnitude=randaug_m)]
+        print(f"RandAugment enabled: N={randaug_n}, M={randaug_m}")
+
+    train_transform = transforms.Compose(resize_train + randaug_fn + cast + aug + normal_fn)
     test_transform = transforms.Compose(resize_test + cast + normal_fn)
 
     return train_transform, test_transform
@@ -633,7 +642,10 @@ def load_data(args, tsne=False):
 
         train_transform, test_transform = transform_imagenet(augment=args.augment,
                                                              size=args.size,
-                                                             from_tensor=False)
+                                                             from_tensor=False,
+                                                             randaug=args.randaug,
+                                                             randaug_n=args.randaug_n,
+                                                             randaug_m=args.randaug_m)
         train_dataset = ImageFolder(traindir,
                                     train_transform,
                                     nclass=args.nclass,
